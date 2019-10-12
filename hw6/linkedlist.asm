@@ -9,15 +9,12 @@
 
 ;; YOUR CODE GOES HERE
 AND R0, R0, 0 ;; sum
-LD R1, LL
-LDR R2, R1, 0 ;; R2 = addr of start
-LDR R3, R1, 1 ;; R3 = length
+LDI R1, LL
 
 LOOP
-LDR R5, R2, 1
+LDR R5, R1, 1
 ADD R0, R0, R5
-LDR R2, R2, 0 ;; load address of next node 
-ADD R3, R3, -1
+LDR R1, R1, 0 ;; load address of next node 
 BRz FINISH
 BRnzp LOOP
 

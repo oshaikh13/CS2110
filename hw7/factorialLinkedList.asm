@@ -119,6 +119,41 @@ sumAndFacLL
         STR R3,R5,#-4 ;
         STR R4,R5,#-5 ;
 
+    ;;SUBROUTINE CODE
+        LDR R0,R5,#4 ; R0 <- head
+        BRz FINISH
+
+        LDR R1, R0, #0 ; <- next
+        LDR R2, R0, #1 ; <- data
+        
+        STR R2,R6,#-1 ; Push head.data on the stack
+        ADD R6,R6,#-1
+
+        AND R3,R2,#1
+        BRz CALLSUMT
+        BR CALLFACT
+
+        CALLSUMT
+        JSR sumtorial
+        BR NEXTNODE
+
+        CALLFACT
+        JSR factorial
+        BR NEXTNODE
+
+        NEXTNODE
+        LDR R3,R6,#0
+        ADD R6,R6,#2
+        STR R3, R0, #1 ;; store result of recursive call
+
+        STR R1,R6,#-1 ; Push head.next on the stack
+        ADD R6,R6,#-1
+        JSR sumAndFacLL
+        ADD R6,R6,#2
+
+        FINISH
+        STR R0, R5, #3
+
     ;;TEARDOWN
         LDR R4,R5,#-5 ; RESTORE SAVED REGISTERS
         LDR R3,R5,#-4 ;
@@ -130,8 +165,6 @@ sumAndFacLL
         LDR R7,R6,#2 ; Restore return address
         ADD R6,R6,#3 ; move stack pointer to RV (return value)
         RET
-
-RET
 
 MULT
     ; Recursive MULT

@@ -35,7 +35,7 @@ State executeCommand(char choice, unsigned int accountNumber) {
             checkRequests(accountNumber);
             return REQUESTS;
         case '6':
-            // TODO: implement
+            writeCSV();
             return USER_EXIT;
         default:
             printf("ERROR: Invalid choice entered (%c)\n", choice);
@@ -153,6 +153,7 @@ void sendMoney(unsigned int senderNumber) {
 
     if (userAmount <= 0) {
         myErrNo = ERR_INVALID_AMOUNT;
+        printf("Invalid amount, try again\n");
         return;
     }
 
@@ -237,11 +238,61 @@ int formatAndCheckCurrency(char *currencyString) {
  * @param accountNumber for retrieving info from the DB
  */
 void requestMoney(unsigned int accountNumber) {
-    UNUSED_PARAM(accountNumber);
+    // UNUSED_PARAM(accountNumber);
     // TODO: implement -- Uncomment the printf below when not testing
-    // printf("Enter the accountNumber you want to request from: ");
+    printf("Enter the accountNumber you want to request from: ");
+    char userInput[256];
+    getLine(userInput, 256);
+    unsigned int requestAccountNumber = strtoul(userInput, NULL, 10);
 
-    // printf("Enter the amount you want to ask this sender: $");  
+    int requestAccountIndex = getAccountIndex(requestAccountNumber);
+    int senderAccountIndex = getAccountIndex(accountNumber);
+
+    UNUSED_PARAM(senderAccountIndex);
+
+    if (accountNumber == requestAccountNumber) {
+        myErrNo = ERR_SELF_REQUEST;
+        return;
+    }
+
+    if (requestAccountNumber >= FIRST_ACCOUNT_NUMBER + MAX_CSV_SIZE) {
+        myErrNo = ERR_INVALID_ACC_NUM;
+        return;
+    }
+
+    if (accountInactive(requestAccountNumber)) {
+        myErrNo = ERR_INACTIVE_ACCOUNT;
+        return;
+    }
+
+    if (requestAccountIndex == -1) {
+        myErrNo = ERR_INVALID_ACC_NUM;
+        return;
+    }
+
+    if (arr[requestAccountIndex].requesterNumber != 0) {
+        myErrNo = ERR_EXISTING_REQUEST;
+        return;
+    }
+
+    printf("Enter the amount you want to ask this sender: $");  
+    getLine(userInput, 256);
+
+    if (formatAndCheckCurrency(userInput) != 0) {
+        printf("Invalid amount, try again\n");
+        return;
+    }
+
+    float userAmount = strtof(userInput, NULL);
+    if (userAmount <= 0) {
+        myErrNo = ERR_INVALID_AMOUNT;
+        printf("Invalid amount, try again\n");
+        return;
+    }
+
+
+    arr[requestAccountIndex].requesterNumber = accountNumber;
+    arr[requestAccountIndex].requestAmount = userAmount;
 }
 
 /**
@@ -250,8 +301,44 @@ void requestMoney(unsigned int accountNumber) {
  * @param accountNumber for retrieving info from the DB
  */
 void checkRequests(unsigned int accountNumber) {
-    UNUSED_PARAM(accountNumber);
-    // TODO: implement
+    int accountIndex = getAccountIndex(accountNumber);
+    if (arr[accountIndex].requesterNumber == 0) {
+        printf("You have no pending requests.\n");
+        return;
+    }
+
+    printf("You have a pending request of $%.2f from accountNumber %i\n", arr[accountIndex].requestAmount, 
+        arr[accountIndex].requesterNumber);
+
+    char choiceBuffer[3]; 
+    printf("Do you want to approve this request? (Y/N): ");
+    getLine(choiceBuffer, sizeof(choiceBuffer));
+
+    if (strlen(choiceBuffer) == 1 && (choiceBuffer[0] == 'Y' || choiceBuffer[0] == 'N')) {
+
+        if (choiceBuffer[0] == 'Y') {
+
+            if (arr[accountIndex].balance - arr[accountIndex].requestAmount < 0) {
+                myErrNo = ERR_NOT_ENOUGH_FUNDS;
+                printf("Not enough funds, sorry.\n");
+                arr[accountIndex].requesterNumber = 0;
+                arr[accountIndex].requestAmount = 0; 
+                return;
+            }
+
+            int reciptIndex = getAccountIndex(arr[accountIndex].requesterNumber);
+
+            arr[accountIndex].balance -= arr[accountIndex].requestAmount;
+            arr[reciptIndex].balance += arr[accountIndex].requestAmount;
+
+        }
+
+        arr[accountIndex].requesterNumber = 0;
+        arr[accountIndex].requestAmount = 0; 
+
+    } else {
+        myErrNo = ERR_INVALID_ARGS;
+    }
 }
 
 // ----------------------- DO NOT MODIFY CODE BELOW -----------------------

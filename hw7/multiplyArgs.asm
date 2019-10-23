@@ -45,7 +45,7 @@ multiplyArgs
         AND R1, R1, 0
         ADD R1, R1, 1
 
-        ADD R2, R5, #4 
+        ADD R2, R5, #4 ;; address of first arg i.e. A in func(A, B)
         LDR R0, R2, #0 ;; numargsleft
         BRz FINISH
         
@@ -57,9 +57,9 @@ multiplyArgs
             STR R1,R6,#-1 ; Push total on the stack
             STR R3,R6,#-2 ; Push arg_x on the stack
             ADD R6,R6,#-2 ; Update the stack pointer
-            JSR MULT
+            JSR MULT ; MULT(arg_x, total)
             LDR R1, R6, #0 ; R1 <- return value
-            ADD R6, R6, #3  
+            ADD R6, R6, #3 ; 3 = num_args + return
 
             ADD R2, R2, #1
             ADD R0, R0, #-1

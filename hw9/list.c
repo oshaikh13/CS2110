@@ -21,7 +21,6 @@
 /* The create_node function is static because this is the only file that should
    have knowledge about the nodes backing the linked List. */
 static inline Node *create_node(Pokemon *data);
-void swap(Node **a, Node **b);
 
 /** create_node
   *
@@ -37,8 +36,8 @@ static Node* create_node(Pokemon *data)
 {
   Node* node = (Node*) malloc(sizeof(Node));
   if (node == NULL) return NULL;
-  node->next = NULL;
   node->data = data;
+  node->next = NULL;
   return node;
 }
 
@@ -142,12 +141,12 @@ int get(LinkedList *listToGetDataFrom, int index, Pokemon **dataOut)
     return 0;
   }
 
-  Node* curr = listToGetDataFrom->head;
+  Node* currNode = listToGetDataFrom->head;
   for (int i = 0; i < index; i++) {
-    curr = curr->next;
+    currNode = currNode->next;
   }
 
-  *dataOut = curr->data;
+  *dataOut = currNode->data;
   return 1;
 }
 
@@ -180,13 +179,13 @@ int contains(LinkedList *listToSearch, Pokemon *data, Pokemon **dataOut)
     return 0;
   }
 
-  Node* curr = listToSearch->head;
-  while (curr != NULL) {
-    if (pokemon_eq_name(data, curr->data) == 0) {
-      *dataOut = curr->data;
+  Node* currNode = listToSearch->head;
+  for (int i = 0; i < listToSearch->size; i++) {
+    if (pokemon_eq_name(data, currNode->data) == 0) {
+      *dataOut = currNode->data;
       return 1;
     }
-    curr = curr->next;
+    currNode = currNode->next;
   }
   *dataOut = NULL;
 
@@ -269,12 +268,12 @@ int remove_at_index(LinkedList * listToRemoveFrom, Pokemon ** dataOut, int index
 void empty_list(LinkedList *listToEmpty)
 {
   if (listToEmpty != NULL) {
-    Node* curr = listToEmpty->head;
-    while (curr != NULL) {
-      listToEmpty->head = curr->next;
-      pokemon_free(curr->data);
-      free(curr);
-      curr = listToEmpty->head;
+    Node* currNode = listToEmpty->head;
+    while (currNode != NULL) {
+      listToEmpty->head = currNode->next;
+      pokemon_free(currNode->data);
+      free(currNode);
+      currNode = listToEmpty->head;
     }
     listToEmpty->size = 0;
   }
@@ -296,38 +295,33 @@ void empty_list(LinkedList *listToEmpty)
   * @param poke2 second node to swap
   * @return 0 if Pokemon not in list or are NULL or if list is NULL, 1 on successful swap
   */
-
-void swap(Node** a, Node** b) 
-{ 
-  Node* t;
-  t = *a;
-  *a = *b;
-  *b = t;
-}
-
 int swap_pokemon(LinkedList *list, Node *poke1, Node *poke2)
 {
   if (list == NULL || poke1 == NULL || poke2 == NULL) return 0;
 
-  Node *prevPoke1 = NULL, *currPoke1 = list->head; 
-  while (currPoke1 && pokemon_eq_name(currPoke1->data, poke1->data)) { 
+  Node *prevPoke1 = NULL;
+  Node *currPoke1 = list->head; 
+  for (int i = 0; i < list->size && pokemon_eq_name(currPoke1->data, poke1->data); i++) {
     prevPoke1 = currPoke1; 
     currPoke1 = currPoke1->next; 
-  } 
+  }
 
-  Node *prevPoke2 = NULL, *currPoke2 = list->head; 
-  while (currPoke2 && pokemon_eq_name(currPoke2->data, poke2->data)) { 
+  Node *prevPoke2 = NULL;
+  Node *currPoke2 = list->head; 
+  for (int i = 0; i < list->size && pokemon_eq_name(currPoke2->data, poke2->data); i++) {
     prevPoke2 = currPoke2; 
     currPoke2 = currPoke2->next; 
   } 
 
   if (currPoke1 == NULL || currPoke2 == NULL) return 0; 
 
-  if (prevPoke1 != NULL) prevPoke1->next = currPoke2; 
-  else list->head = currPoke2;   
+  if (prevPoke1 == NULL) {
+    list->head = currPoke2;
+  } else prevPoke1->next = currPoke2; 
 
-  if (prevPoke2 != NULL) prevPoke2->next = currPoke1; 
-  else list->head = currPoke1; 
+  if (prevPoke2 == NULL) {
+    list->head = currPoke1; 
+  } else prevPoke2->next = currPoke1; 
 
   Node *temp = currPoke2->next; 
   currPoke2->next = currPoke1->next; 
@@ -371,6 +365,6 @@ void zip(LinkedList *team1, LinkedList *team2)
     free(prev);
     i++;
   }
-  team2->head = NULL;
   team2->size = 0;
+  team2->head = NULL;
 }

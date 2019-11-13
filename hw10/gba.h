@@ -16,7 +16,7 @@ typedef unsigned char u8;
 // ---------------------------------------------------------------------------
 //                       MODE3 MACROS
 // ---------------------------------------------------------------------------
-#define OFFSET(r, c, rowlen) ((c)+(rowlen)*(r))
+#define OFFSET(x, y, width) ((x)+(width)*(y))
 
 #define REG_DISPCNT  *(volatile unsigned short *) 0x4000000
 #define MODE3 3
@@ -61,7 +61,7 @@ extern volatile unsigned short *videoBuffer;
 // Remember that a button is recently pressed if it wasn't pressed in the last
 // input (oldButtons) but is pressed in the current input. Use the KEY_DOWN
 // macro to check if the button was pressed in the inputs.
-#define KEY_JUST_PRESSED(key, buttons, oldbuttons)
+#define KEY_JUST_PRESSED(key, buttons, oldbuttons) (KEY_DOWN(key, buttons) && !KEY_DOWN(key, oldbuttons))
 
 // ---------------------------------------------------------------------------
 //                       DMA
@@ -139,9 +139,9 @@ void drawRectDMA(int x, int y, int width, int height, volatile u16 color);
 void drawFullScreenImageDMA(const u16 *image);
 void drawImageDMA(int x, int y, int width, int height, const u16 *image);
 void fillScreenDMA(volatile u16 color);
-void drawChar(int col, int row, char ch, u16 color);
-void drawString(int col, int row, char *str, u16 color);
-void drawCenteredString(int col, int row, int width, int height, char *str, u16 color);
+void drawChar(int x, int y, char ch, u16 color);
+void drawString(int x, int y, char *str, u16 color);
+void drawCenteredString(int x, int y, int width, int height, char *str, u16 color);
 
 /** Contains the pixels of each character from a 6x8 font */
 // This is in the font.c file. You can replace the font if you want.

@@ -16,6 +16,9 @@ void waitForVBlank(void) {
     // (3)
     // Finally, increment the vBlank counter:
 
+    while (*SCANLINECOUNTER > 160);
+    while (*SCANLINECOUNTER < 160);
+    vBlankCounter++;
 }
 
 static int __qran_seed= 42;
@@ -30,53 +33,55 @@ int randint(int min, int max) {
 
 void setPixel(int x, int y, u16 color) {
     // TODO: IMPLEMENT
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(color);
+    videoBuffer[OFFSET(x, y, WIDTH)] = color;
 }
 
 void drawRectDMA(int x, int y, int width, int height, volatile u16 color) {
     // TODO: IMPLEMENT
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(width);
-    UNUSED(height);
-    UNUSED(color);
+    for (int row = 0; row < height; row++) {
+        DMA[3].src = &color;
+        DMA[3].dst = &videoBuffer[OFFSET(x, y + row, WIDTH)];
+        DMA[3].cnt = width | DMA_SOURCE_FIXED | DMA_ON | DMA_DESTINATION_INCREMENT;
+    }
 }
 
 void drawFullScreenImageDMA(const u16 *image) {
     // TODO: IMPLEMENT
-    UNUSED(image);
+    DMA[3].src = image;
+    DMA[3].dst = videoBuffer;
+    DMA[3].cnt = (WIDTH * HEIGHT) | DMA_SOURCE_INCREMENT | DMA_DESTINATION_INCREMENT | DMA_ON;
 }
 
 void drawImageDMA(int x, int y, int width, int height, const u16 *image) {
     // TODO: IMPLEMENT
-    UNUSED(x);
-    UNUSED(y);
-    UNUSED(width);
-    UNUSED(height);
-    UNUSED(image);
+    for (int row = 0; row < height; row++) {
+        DMA[3].src = &image[OFFSET(0, row, width)];
+        DMA[3].dst = &videoBuffer[OFFSET(x, y + row, WIDTH)];
+        DMA[3].cnt = width | DMA_SOURCE_INCREMENT | DMA_DESTINATION_INCREMENT | DMA_ON;
+    }
 }
 
 void fillScreenDMA(volatile u16 color) {
     // TODO: IMPLEMENT
-    UNUSED(color);
+    DMA[3].src = &color;
+    DMA[3].dst = videoBuffer;
+    DMA[3].cnt = (WIDTH * HEIGHT) | DMA_SOURCE_FIXED | DMA_DESTINATION_INCREMENT | DMA_ON;
 }
 
-void drawChar(int col, int row, char ch, u16 color) {
-    for(int r = 0; r<8; r++) {
-        for(int c=0; c<6; c++) {
-            if(fontdata_6x8[OFFSET(r, c, 6) + ch*48]) {
-                setPixel(col+c, row+r, color);
+void drawChar(int x, int y, char ch, u16 color) {
+    for(int i = 0; i<6; i++) {
+        for(int j=0; j<8; j++) {
+            if(fontdata_6x8[OFFSET(i, j, 6) + ch*48]) {
+                setPixel(x+i, y+j, color);
             }
         }
     }
 }
 
-void drawString(int col, int row, char *str, u16 color) {
+void drawString(int x, int y, char *str, u16 color) {
     while(*str) {
-        drawChar(col, row, *str++, color);
-        col += 6;
+        drawChar(x, y, *str++, color);
+        x += 6;
     }
 }
 

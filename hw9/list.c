@@ -267,16 +267,20 @@ int remove_at_index(LinkedList * listToRemoveFrom, Pokemon ** dataOut, int index
   */
 void empty_list(LinkedList *listToEmpty)
 {
-  if (listToEmpty != NULL) {
-    Node* currNode = listToEmpty->head;
-    while (currNode != NULL) {
-      listToEmpty->head = currNode->next;
-      pokemon_free(currNode->data);
-      free(currNode);
-      currNode = listToEmpty->head;
-    }
-    listToEmpty->size = 0;
+  if (listToEmpty == NULL) {
+    return;
   }
+
+  Node *curr = listToEmpty->head;
+  while (curr != NULL) {
+
+    pokemon_free(curr->data);
+    Node *tempCurr = curr;
+    curr = curr->next;
+    free(tempCurr);
+  }
+  
+  listToEmpty->size = 0;
 }
 
 /** swap_pokemon

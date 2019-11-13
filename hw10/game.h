@@ -3,9 +3,8 @@
 
 #include "gba.h"
 
-                    /* TODO: */
-
-            // Create any necessary structs //
+/* TODO: */
+// Create any necessary structs //
 
 
 /*

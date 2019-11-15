@@ -61,6 +61,15 @@ void drawImageDMA(int x, int y, int width, int height, const u16 *image) {
     }
 }
 
+void drawImagePortionDMA(int x, int y, int width, int height, const u16 *image) {
+    // TODO: IMPLEMENT
+    for (int row = 0; row < height; row++) {
+        DMA[3].src = &image[OFFSET(x, y + row, WIDTH)];
+        DMA[3].dst = &videoBuffer[OFFSET(x, y + row, WIDTH)];
+        DMA[3].cnt = width | DMA_SOURCE_INCREMENT | DMA_DESTINATION_INCREMENT | DMA_ON;
+    }
+}
+
 void fillScreenDMA(volatile u16 color) {
     // TODO: IMPLEMENT
     DMA[3].src = &color;

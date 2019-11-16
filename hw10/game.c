@@ -38,46 +38,22 @@ typedef struct Fly {
  int dy;
  int dx;
  int w;
- int h;   
+ int h;
+ int visible; 
 } Fly;
 
-int deltas[] = {-3, -2, -1, 1, 2, 3};
 
 struct Fly flies[5];
-int attempts = 0;
-int ndelta = 6;
+int numVisible = 5;
 
 void moveSwatter(Swatter* p, int s);
 void drawPlayer(Swatter* p);
 void undrawPlayer(Swatter* p, int s);
 void initFlies(void);
-void updateFlies(void);
+void updateFlies(int clockCycle);
 void drawFlies(void);
+int checkCollisionAndRespawn(Swatter* p, u32 currentButtons, u32 previousButtons, int clockCycle);
 
-
-// void undraw(Swatter* p, int s) {
-
-// 	int x = p->x;
-// 	int y = p->y;
-//   int w = p->w;
-//   int h = p->h;
-
-//   if(KEY_DOWN(BUTTON_LEFT, BUTTONS)) {
-//     drawImagePortionDMA(x + w, y, s, h, window);   
-//   }
-  
-//   if(KEY_DOWN(BUTTON_RIGHT, BUTTONS)) {
-//     drawImagePortionDMA(x - s, y, s, h, window);
-//   }
-
-// 	if(KEY_DOWN(BUTTON_UP, BUTTONS)) {
-// 		drawImagePortionDMA(x, y + h, w, s, window);
-// 	}
-
-// 	if(KEY_DOWN(BUTTON_DOWN, BUTTONS)) {
-// 		drawImagePortionDMA(x, y - s, w, s, window);
-// 	}
-// }
 
 void undraw(Swatter* p) {
 
@@ -93,13 +69,16 @@ void moveSwatter(Swatter* p, int s) {
   undraw(p);
   if (KEY_DOWN(BUTTON_LEFT, BUTTONS) && p->x > 0) {
     p->x = p->x - s;
-  } 
+  }
+
   if (KEY_DOWN(BUTTON_RIGHT, BUTTONS) && p->x + p->w + s < WIDTH) {
     p->x = p->x + s; 
   }
+
   if (KEY_DOWN(BUTTON_DOWN, BUTTONS) && p->y + p->h < HEIGHT) {
     p->y = p->y + s; 
   }
+
   if (KEY_DOWN(BUTTON_UP, BUTTONS) && p->y > 0) {
     p->y = p->y - s;
   }
@@ -109,26 +88,74 @@ void moveSwatter(Swatter* p, int s) {
 
 void drawFlies(void) {
   for (int i = 0; i < 5; i++) {
-    drawRectDMA(flies[i].x, flies[i].y, flies[i].w, flies[i].h, RED);
+    if (flies[i].visible) {
+      drawRectDMA(flies[i].x, flies[i].y, flies[i].w, flies[i].h, RED);
+    }
   }
 
 }
 
 void initFlies(void) {
+  numVisible = 5;
   for (int i = 0; i < 5; i++) {
     flies[i].x = randint(0, WIDTH);
     flies[i].y = randint(0, HEIGHT);
     flies[i].w = 10;
     flies[i].h = 10;
-    flies[i].dy = deltas[randint(0, ndelta)];
-    flies[i].dx = deltas[randint(0, ndelta)];
+    flies[i].visible = 1;
+    flies[i].dy = 1;
+    flies[i].dx = 1;
   }
+
+  for (int i = 0; i < 2; i++) {
+    numVisible--;
+    flies[i].visible = 0;
+  }
+
 }
 
+int checkCollisionAndRespawn(Swatter *p, u32 currentButtons, u32 previousButtons, int clockCycle) {
+  int madeVisible = 0;
+  for (int i = 0; i < 5; i++) {
 
-void updateFlies(void) {
+    if (clockCycle % 600 == 0) {
+      if (!flies[i].visible && !madeVisible) {
+        numVisible++;
+        madeVisible = 1;
+        flies[i].visible = 1;
+      }
+    }
+
+    if (flies[i].x >= p->x && p->x + p->w >= flies[i].x && flies[i].y >= p->y && flies[i].y <= p->y + p->h && KEY_JUST_PRESSED(BUTTON_A, currentButtons, previousButtons)) {
+      numVisible--;
+      flies[i].visible = 0;
+      return 1;
+    }
+
+  }
+  return 0;
+}
+
+void updateFlies(int clockCycle) {
   for(int i=0; i < 5; i++) {
     drawImagePortionDMA(flies[i].x, flies[i].y, flies[i].w, flies[i].h, window);
+
+    if (clockCycle % 50 == 0) {
+      int tempDx = randint(0, 2);
+      int tempDy = randint(0, 2);
+
+      if (tempDx == 0) {
+        flies[i].dx = -1;
+      } else {
+        flies[i].dx = 1;
+      }
+
+      if (tempDy == 0) {
+        flies[i].dy = -1;
+      } else {
+        flies[i].dy = 1;
+      }
+    }
 
     flies[i].x = flies[i].x + flies[i].dx;
     flies[i].y = flies[i].y + flies[i].dy;
@@ -184,6 +211,7 @@ int main(void) {
   Swatter *p = &playerSwatter;
   drawFullScreenImageDMA(startScreen);
 
+  int clockCycle = 0;
   while (1) {
     currentButtons = BUTTONS; // Load the current state of the buttons
 
@@ -210,8 +238,16 @@ int main(void) {
         }
         break;
       case PLAY:
-        updateFlies();
+        updateFlies(clockCycle);
+        checkCollisionAndRespawn(p, currentButtons, previousButtons, clockCycle);
         moveSwatter(p, 3);
+        if (numVisible == 5) {
+          initFlies();
+          drawFullScreenImageDMA(startScreen);
+          p->x = 0;
+          p->y = 0;
+          state = LOSE;
+        }
         // state = ?
         break;
       case WIN:
@@ -224,7 +260,7 @@ int main(void) {
         break;
     }
 
-
+    clockCycle++;
     previousButtons = currentButtons; // Store the current state of the buttons
   }
 

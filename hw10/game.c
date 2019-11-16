@@ -7,8 +7,8 @@
 #include "images/swatter.h"
 #include "images/flyImg.h"
 #include "images/startScreen.h"
-// #include "images/loseScreen.h"
-// #include "images/winScreen.h"
+#include "images/loseScreen.h"
+#include "images/winScreen.h"
 
                     /* TODO: */
 // Include any header files for title screen or exit
@@ -135,7 +135,7 @@ int checkCollisionAndRespawn(Swatter *p, u32 currentButtons, u32 previousButtons
     }
 
     if (flies[i].x >= p->x && p->x + p->w >= flies[i].x && 
-        flies[i].y >= p->y && flies[i].y <= p->y + p->h && 
+        flies[i].y >= p->y && flies[i].y <= p->y + p->h && flies[i].visible &&
         KEY_JUST_PRESSED(BUTTON_A, currentButtons, previousButtons) && showSwatted == 0) {
       numVisible--;
       printScore();
@@ -279,16 +279,32 @@ int main(void) {
 
         if (numVisible == 5) {
           resetState();
+          drawFullScreenImageDMA(loseScreen);
           state = LOSE;
         }
-        // state = ?
-        break;
-      case WIN:
+
+        if (numVisible == 0) {
+          resetState();
+          drawFullScreenImageDMA(winScreen);
+          state = WIN;
+        }
 
         // state = ?
         break;
+      case WIN:
+        if (KEY_JUST_PRESSED(BUTTON_START, currentButtons, previousButtons)) {
+          drawFullScreenImageDMA(window);
+          printScore();
+          state = PLAY;
+        }
+        // state = ?
+        break;
       case LOSE:
-    
+        if (KEY_JUST_PRESSED(BUTTON_START, currentButtons, previousButtons)) {
+          drawFullScreenImageDMA(window);
+          printScore();
+          state = PLAY;
+        }
         // state = ?
         break;
     }

@@ -18,6 +18,13 @@
  * Here is a place to put all of your function headers
  * Remember to declare them as static
  */
+static void set_canary(metadata_t* block);
+static void remove_from_addr_list(metadata_t* remove_block);
+static metadata_t* split_block(metadata_t* block, size_t size);
+static metadata_t* find_left(metadata_t* block);
+static metadata_t* split_block(metadata_t* block, size_t size);
+static void add_to_addr_list(metadata_t* add_block);
+static void merge(metadata_t* left, metadata_t* right);
 
 /* Our freelist structure - our freelist is represented as a singly linked list
  * the freelist is sorted by address;
@@ -35,8 +42,53 @@ enum my_malloc_err my_malloc_errno;
  * See PDF for documentation
  */
 void *my_malloc(size_t size) {
-    UNUSED_PARAMETER(size);
-	return (NULL);
+
+	metadata_t *best_block = NULL;
+  my_malloc_errno = NO_ERROR;
+
+	if (size > SBRK_SIZE - TOTAL_METADATA_SIZE) {
+		my_malloc_errno = SINGLE_REQUEST_TOO_LARGE;
+	} else if (size != 0) {
+		metadata_t *curr = address_list;
+		// printf("%ld", MIN_BLOCK_SIZE);
+		while (curr != NULL) {
+			if (size == curr->size) {
+				remove_from_addr_list(curr);
+				set_canary(curr);
+				return (void*)((uint8_t*)curr + sizeof(metadata_t));
+			} else if (size + MIN_BLOCK_SIZE < curr->size) {
+				best_block = curr;
+				remove_from_addr_list(best_block);
+				metadata_t *p = split_block(best_block, size);
+				set_canary(p);
+				add_to_addr_list(best_block);
+				return (void*)((uint8_t*)p + sizeof(metadata_t));
+			}
+			curr = curr->next;
+		}
+
+		metadata_t *sbrk = my_sbrk(SBRK_SIZE);
+		if (sbrk == NULL) {
+			my_malloc_errno = OUT_OF_MEMORY;
+		} else {
+			metadata_t *left = find_left(sbrk);
+			sbrk->size = SBRK_SIZE - TOTAL_METADATA_SIZE;
+			if (left != NULL) {
+				remove_from_addr_list(left);
+				merge(left, sbrk);
+				sbrk = left;
+			}
+			
+			metadata_t *tmp_sbrk = sbrk;
+			if (sbrk->size != size) {
+				tmp_sbrk = split_block(sbrk, size);
+				add_to_addr_list(sbrk);
+			}
+			set_canary(tmp_sbrk);
+			return (void*)((uint8_t*)tmp_sbrk + sizeof(metadata_t));
+		}
+  }
+  return NULL;
 }
 
 /* REALLOC
@@ -52,9 +104,12 @@ void *my_realloc(void *ptr, size_t size) {
  * See PDF for documentation
  */
 void *my_calloc(size_t nmemb, size_t size) {
-	UNUSED_PARAMETER(nmemb);
-	UNUSED_PARAMETER(size);
-	return (NULL);
+	size_t s = size * nmemb;
+	void* curr = my_malloc(s);
+	if (curr != NULL) {
+		memset(curr, 0, s);
+	}
+	return curr;
 }
 
 /* FREE
@@ -62,4 +117,68 @@ void *my_calloc(size_t nmemb, size_t size) {
  */
 void my_free(void *ptr) {
 	UNUSED_PARAMETER(ptr);
+}
+
+// static bool check_canary(metadata_t* block, unsigned long canary) {
+//   return block->canary != canary || *(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) != canary;
+// }
+
+static void set_canary(metadata_t* block) {
+	unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
+	block->canary = canary;
+	*(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) = canary;
+}
+
+static void remove_from_addr_list(metadata_t* remove_block) {
+	metadata_t *curr = address_list;
+	metadata_t **indirect = &address_list;
+	while (curr != NULL) {
+		if (curr == remove_block) {
+			*indirect = curr->next;
+			curr->next = NULL;
+			break;
+		}
+		indirect = &(curr->next);
+		curr = curr->next;
+	}
+
+}
+
+static metadata_t* find_left(metadata_t* block) {
+	metadata_t *curr = address_list;
+	
+	while (curr != NULL) {
+		if ((metadata_t*)((uint8_t*)curr + curr->size + TOTAL_METADATA_SIZE) == block) {
+			return curr;
+		}
+		curr = curr->next;
+	}
+	return NULL;
+}
+
+static void merge(metadata_t* left, metadata_t* right) {
+  left->size += right->size + TOTAL_METADATA_SIZE;
+}
+
+static metadata_t* split_block(metadata_t* block, size_t size) {
+	metadata_t* split = (metadata_t*)((uint8_t*)block + block->size - size);
+	split->size = size;
+	block->size -= size + TOTAL_METADATA_SIZE;
+	return split;
+}
+
+static void add_to_addr_list(metadata_t* add_block) {
+	metadata_t *curr = address_list;
+	metadata_t **indirect = &address_list;
+	while (curr != NULL) {
+		if (add_block->size <= curr->size) {
+			add_block->next = curr;
+			*indirect = add_block;
+			return;
+		}
+		indirect = &(curr->next);
+		curr = curr->next;
+	}
+	add_block->next = NULL;
+	*indirect = add_block;
 }

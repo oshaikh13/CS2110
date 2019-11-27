@@ -25,6 +25,8 @@ static metadata_t* find_left(metadata_t* block);
 static metadata_t* split_block(metadata_t* block, size_t size);
 static void add_to_addr_list(metadata_t* add_block);
 static void merge(metadata_t* left, metadata_t* right);
+static bool check_canary(metadata_t* block, unsigned long canary);
+static metadata_t* find_right(metadata_t* block);
 
 /* Our freelist structure - our freelist is represented as a singly linked list
  * the freelist is sorted by address;
@@ -44,6 +46,7 @@ enum my_malloc_err my_malloc_errno;
 void *my_malloc(size_t size) {
 
 	metadata_t *best_block = NULL;
+	size_t best_size = 0;
   my_malloc_errno = NO_ERROR;
 
 	if (size > SBRK_SIZE - TOTAL_METADATA_SIZE) {
@@ -57,15 +60,27 @@ void *my_malloc(size_t size) {
 				set_canary(curr);
 				return (void*)((uint8_t*)curr + sizeof(metadata_t));
 			} else if (size + MIN_BLOCK_SIZE < curr->size) {
-				best_block = curr;
-				remove_from_addr_list(best_block);
-				metadata_t *p = split_block(best_block, size);
-				set_canary(p);
-				add_to_addr_list(best_block);
-				return (void*)((uint8_t*)p + sizeof(metadata_t));
+
+				if (best_block == NULL) {
+					best_block = curr;
+					best_size = size + MIN_BLOCK_SIZE;
+				} else if (size + MIN_BLOCK_SIZE < best_size) {
+					best_block = curr;
+					best_size = size + MIN_BLOCK_SIZE;
+				}
+				
 			}
 			curr = curr->next;
 		}
+
+		if (best_block != NULL) {
+			remove_from_addr_list(best_block);
+			metadata_t *p = split_block(best_block, size);
+			set_canary(p);
+			add_to_addr_list(best_block);
+			return (void*)((uint8_t*)p + sizeof(metadata_t));
+		}
+
 
 		metadata_t *sbrk = my_sbrk(SBRK_SIZE);
 		if (sbrk == NULL) {
@@ -95,9 +110,32 @@ void *my_malloc(size_t size) {
  * See PDF for documentation
  */
 void *my_realloc(void *ptr, size_t size) {
-	UNUSED_PARAMETER(ptr);
-	UNUSED_PARAMETER(size);
-	return (NULL);
+	if(ptr == NULL) {
+		return my_malloc(size);
+	}
+
+	if (size == 0) {
+		my_free(ptr);
+		return NULL;
+	}
+	
+	metadata_t* block = (metadata_t*)((uint8_t*)ptr - sizeof(metadata_t));
+	unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
+	if (check_canary(block, canary)) {
+		my_malloc_errno = CANARY_CORRUPTED;
+	} else {
+		void* curr = my_malloc(size);
+		size_t s = size;
+		if (size > block->size) {
+				s = block->size;
+		}
+		
+		memcpy(curr, ptr, s);
+		my_free(ptr);
+		return curr;
+	}
+	
+	return NULL;
 }
 
 /* CALLOC
@@ -116,12 +154,34 @@ void *my_calloc(size_t nmemb, size_t size) {
  * See PDF for documentation
  */
 void my_free(void *ptr) {
-	UNUSED_PARAMETER(ptr);
+	my_malloc_errno = NO_ERROR;
+	if (ptr != NULL) {
+		metadata_t* block = (metadata_t*)((uint8_t*)ptr - sizeof(metadata_t));
+		unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
+		if (check_canary(block, canary)) {
+			my_malloc_errno = CANARY_CORRUPTED;
+		} else {
+			metadata_t *right = find_right(block);
+			if (right != NULL) {
+				remove_from_addr_list(right);
+				merge(block, right);
+			}
+			
+			metadata_t *left = find_left(block);
+			if (left != NULL) {
+				remove_from_addr_list(left);
+				merge(left, block);
+				block = left;
+			}
+			
+			add_to_addr_list(block);
+		}
+	}
 }
 
-// static bool check_canary(metadata_t* block, unsigned long canary) {
-//   return block->canary != canary || *(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) != canary;
-// }
+static bool check_canary(metadata_t* block, unsigned long canary) {
+  return block->canary != canary || *(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) != canary;
+}
 
 static void set_canary(metadata_t* block) {
 	unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
@@ -156,6 +216,20 @@ static metadata_t* find_left(metadata_t* block) {
 	return NULL;
 }
 
+static metadata_t* find_right(metadata_t* block) {
+	metadata_t* right = (metadata_t*)((uint8_t*)block + block->size + TOTAL_METADATA_SIZE);
+	metadata_t* curr = address_list;
+	
+	while (curr != NULL) {
+		if (curr == right) {
+			return curr;
+		}
+		
+		curr = curr->next;
+	}
+	return NULL;
+}
+
 static void merge(metadata_t* left, metadata_t* right) {
   left->size += right->size + TOTAL_METADATA_SIZE;
 }
@@ -171,7 +245,7 @@ static void add_to_addr_list(metadata_t* add_block) {
 	metadata_t *curr = address_list;
 	metadata_t **indirect = &address_list;
 	while (curr != NULL) {
-		if (add_block->size <= curr->size) {
+		if ((uintptr_t) add_block <= (uintptr_t) curr) {
 			add_block->next = curr;
 			*indirect = add_block;
 			return;

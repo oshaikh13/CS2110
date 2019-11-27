@@ -46,8 +46,10 @@ typedef struct Fly {
 
 struct Fly flies[5];
 int numVisible = 5;
-int clockCycle = 0;
 int showSwatted = 0;
+int swatCntr = 0;
+int timeTracker = 0;
+
 Swatter playerSwatter = {0, 0, 20, 20};
 Swatter *p = &playerSwatter;
 
@@ -55,25 +57,14 @@ void moveSwatter(Swatter* p, int s, u32 currentButtons, u32 previousButtons);
 void drawPlayer(Swatter* p, u32 currentButtons, u32 previousButtons);
 void undrawPlayer(Swatter* p, int s);
 void initFlies(void);
-void updateFlies(int clockCycle);
+void updateFlies(void);
 void drawFlies(void);
 void resetState(void);
 void printScore(void);
-int checkCollisionAndRespawn(Swatter* p, u32 currentButtons, u32 previousButtons, int clockCycle);
-
-
-void undraw(Swatter* p) {
-
-	int x = p->x;
-	int y = p->y;
-  int w = p->w;
-  int h = p->h;
-  drawImagePortionDMA(x, y, w, h, window);
-}
+int checkCollisionAndRespawn(Swatter* p, u32 currentButtons, u32 previousButtons);
 
 void moveSwatter(Swatter* p, int s, u32 currentButtons, u32 previousButtons) {
-
-  undraw(p);
+  drawImagePortionDMA(p->x, p->y, p->w, p->h, window);
   if (KEY_DOWN(BUTTON_LEFT, BUTTONS) && p->x > 0) {
     p->x = p->x - s;
   }
@@ -90,7 +81,25 @@ void moveSwatter(Swatter* p, int s, u32 currentButtons, u32 previousButtons) {
     p->y = p->y - s;
   }
   drawPlayer(p, currentButtons, previousButtons);
-  // undraw(p, s);
+}
+
+void drawPlayer(Swatter* p, u32 currentButtons, u32 previousButtons) {
+  swatCntr++;
+  if (swatCntr > 10 && showSwatted == 1) {
+    showSwatted = 0;
+    swatCntr = 0;
+  }
+
+  if (KEY_JUST_PRESSED(BUTTON_A, currentButtons, previousButtons)) {
+    showSwatted = 1;
+    swatCntr = 0;
+  }
+
+  if (showSwatted) {
+    drawRectDMA(p->x, p->y, p->w, p->h, BLACK);
+  } else {
+    drawImageDMA(p->x, p->y, p->w, p->h, swatter);
+  }
 }
 
 void drawFlies(void) {
@@ -121,11 +130,11 @@ void initFlies(void) {
 
 }
 
-int checkCollisionAndRespawn(Swatter *p, u32 currentButtons, u32 previousButtons, int clockCycle) {
+int checkCollisionAndRespawn(Swatter *p, u32 currentButtons, u32 previousButtons) {
   int madeVisible = 0;
   for (int i = 0; i < 5; i++) {
 
-    if (clockCycle % 600 == 0) {
+    if (timeTracker % 600 == 0) {
       if (!flies[i].visible && !madeVisible) {
         numVisible++;
         printScore();
@@ -147,11 +156,12 @@ int checkCollisionAndRespawn(Swatter *p, u32 currentButtons, u32 previousButtons
   return 0;
 }
 
-void updateFlies(int clockCycle) {
+// edited from Lecture code.
+void updateFlies(void) {
   for(int i=0; i < 5; i++) {
     drawImagePortionDMA(flies[i].x, flies[i].y, flies[i].w, flies[i].h, window);
 
-    if (clockCycle % 50 == 0) {
+    if (timeTracker % 50 == 0) {
       int tempDx = randint(0, 2);
       int tempDy = randint(0, 2);
 
@@ -192,35 +202,16 @@ void updateFlies(int clockCycle) {
       flies[i].y = 0;
       flies[i].dy = -flies[i].dy;
     }
-
-  }
-  drawFlies();
-}
-
-int swatCntr = 0;
-void drawPlayer(Swatter* p, u32 currentButtons, u32 previousButtons) {
-  swatCntr++;
-  if (swatCntr > 10 && showSwatted == 1) {
-    showSwatted = 0;
-    swatCntr = 0;
-  }
-
-  if (KEY_JUST_PRESSED(BUTTON_A, currentButtons, previousButtons)) {
-    showSwatted = 1;
-    swatCntr = 0;
-  }
-
-  if (showSwatted) {
-    drawRectDMA(p->x, p->y, p->w, p->h, BLACK);
-  } else {
-    drawImageDMA(p->x, p->y, p->w, p->h, swatter);
   }
 }
+
 
 void resetState(void) {
   initFlies();
   p->x = 0;
   p->y = 0;
+  swatCntr = 0;
+  timeTracker = 0;
 }
 
 void printScore(void) {
@@ -273,8 +264,9 @@ int main(void) {
         }
         break;
       case PLAY:
-        updateFlies(clockCycle);
-        checkCollisionAndRespawn(p, currentButtons, previousButtons, clockCycle);
+        updateFlies();
+        drawFlies();
+        checkCollisionAndRespawn(p, currentButtons, previousButtons);
         moveSwatter(p, 3, currentButtons, previousButtons);
 
         if (numVisible == 5) {
@@ -303,17 +295,16 @@ int main(void) {
         if (KEY_JUST_PRESSED(BUTTON_START, currentButtons, previousButtons)) {
           drawFullScreenImageDMA(window);
           printScore();
+          resetState();
           state = PLAY;
         }
         // state = ?
         break;
     }
 
-    clockCycle++;
     previousButtons = currentButtons; // Store the current state of the buttons
+    timeTracker++;
+
   }
-
-  UNUSED(previousButtons); // You can remove this once previousButtons is used
-
   return 0;
 }

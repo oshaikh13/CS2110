@@ -64,14 +64,10 @@ void *my_malloc(size_t size) {
       remove_from_addr_list(curr);
       set_canary(curr);
       return curr + 1;
-    } else if (size + MIN_BLOCK_SIZE < curr->size) {
-      if (best_block == NULL) {
-        best_block = curr;
-        best_size = size + MIN_BLOCK_SIZE;
-      } else if (size + MIN_BLOCK_SIZE < best_size) {
-        best_block = curr;
-        best_size = size + MIN_BLOCK_SIZE;
-      }
+    } else if (size + MIN_BLOCK_SIZE < curr->size && 
+        (best_block == NULL || size + MIN_BLOCK_SIZE < best_size)) {
+      best_block = curr;
+      best_size = size + MIN_BLOCK_SIZE;
     }
     curr = curr->next;
   }

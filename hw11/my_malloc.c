@@ -51,66 +51,69 @@ void *my_malloc(size_t size) {
 
 	if (size > SBRK_SIZE - TOTAL_METADATA_SIZE) {
 		my_malloc_errno = SINGLE_REQUEST_TOO_LARGE;
-	} else if (size != 0) {
-		metadata_t *curr = address_list;
-		// printf("%ld", MIN_BLOCK_SIZE);
-		while (curr != NULL) {
-			if (size == curr->size) {
-				remove_from_addr_list(curr);
-				set_canary(curr);
-				return (void*)((uint8_t*)curr + sizeof(metadata_t));
-			} else if (size + MIN_BLOCK_SIZE < curr->size) {
+		return NULL;
+	}  
+	
+	if (size == 0) {
+		return NULL;
+	}
 
-				if (best_block == NULL) {
-					best_block = curr;
-					best_size = size + MIN_BLOCK_SIZE;
-				} else if (size + MIN_BLOCK_SIZE < best_size) {
-					best_block = curr;
-					best_size = size + MIN_BLOCK_SIZE;
-				}
-				
+	metadata_t *curr = address_list;
+	while (curr != NULL) {
+		if (size == curr->size) {
+			remove_from_addr_list(curr);
+			set_canary(curr);
+			return curr + 1;
+		} else if (size + MIN_BLOCK_SIZE < curr->size) {
+			if (best_block == NULL) {
+				best_block = curr;
+				best_size = size + MIN_BLOCK_SIZE;
+			} else if (size + MIN_BLOCK_SIZE < best_size) {
+				best_block = curr;
+				best_size = size + MIN_BLOCK_SIZE;
 			}
-			curr = curr->next;
 		}
+		curr = curr->next;
+	}
 
-		if (best_block != NULL) {
-			remove_from_addr_list(best_block);
-			metadata_t *p = split_block(best_block, size);
-			set_canary(p);
-			add_to_addr_list(best_block);
-			return (void*)((uint8_t*)p + sizeof(metadata_t));
-		}
+	if (best_block != NULL) {
+		remove_from_addr_list(best_block);
+		metadata_t *p = split_block(best_block, size);
+		set_canary(p);
+		add_to_addr_list(best_block);
+		return p + 1;
+	}
 
+	metadata_t *sbrk = my_sbrk(SBRK_SIZE);
+	if (sbrk == NULL) {
+		my_malloc_errno = OUT_OF_MEMORY;
+		return NULL;
+	}
 
-		metadata_t *sbrk = my_sbrk(SBRK_SIZE);
-		if (sbrk == NULL) {
-			my_malloc_errno = OUT_OF_MEMORY;
-		} else {
-			metadata_t *left = find_left(sbrk);
-			sbrk->size = SBRK_SIZE - TOTAL_METADATA_SIZE;
-			if (left != NULL) {
-				remove_from_addr_list(left);
-				merge(left, sbrk);
-				sbrk = left;
-			}
-			
-			metadata_t *tmp_sbrk = sbrk;
-			if (sbrk->size != size) {
-				tmp_sbrk = split_block(sbrk, size);
-				add_to_addr_list(sbrk);
-			}
-			set_canary(tmp_sbrk);
-			return (void*)((uint8_t*)tmp_sbrk + sizeof(metadata_t));
-		}
-  }
-  return NULL;
+	metadata_t *left = find_left(sbrk);
+	sbrk->size = SBRK_SIZE - TOTAL_METADATA_SIZE;
+	if (left != NULL) {
+		remove_from_addr_list(left);
+		merge(left, sbrk);
+		sbrk = left;
+	}
+	
+	metadata_t *tmp_sbrk = sbrk;
+	if (sbrk->size != size) {
+		tmp_sbrk = split_block(sbrk, size);
+		add_to_addr_list(sbrk);
+	}
+	set_canary(tmp_sbrk);
+	return tmp_sbrk + 1;
+	
 }
 
 /* REALLOC
  * See PDF for documentation
  */
 void *my_realloc(void *ptr, size_t size) {
-	if(ptr == NULL) {
+
+	if (ptr == NULL) {
 		return my_malloc(size);
 	}
 
@@ -119,23 +122,23 @@ void *my_realloc(void *ptr, size_t size) {
 		return NULL;
 	}
 	
-	metadata_t* block = (metadata_t*)((uint8_t*)ptr - sizeof(metadata_t));
+	metadata_t* block = (metadata_t*) ptr - 1;
 	unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
-	if (check_canary(block, canary)) {
+	if (!check_canary(block, canary)) {
 		my_malloc_errno = CANARY_CORRUPTED;
-	} else {
-		void* curr = my_malloc(size);
-		size_t s = size;
-		if (size > block->size) {
-				s = block->size;
-		}
-		
-		memcpy(curr, ptr, s);
-		my_free(ptr);
-		return curr;
+		return NULL;
+	}
+
+	void* curr = my_malloc(size);
+	size_t s = size;
+	if (size > block->size) {
+		s = block->size;
 	}
 	
-	return NULL;
+	memcpy(curr, ptr, s);
+	my_free(ptr);
+	return curr;
+	
 }
 
 /* CALLOC
@@ -155,32 +158,38 @@ void *my_calloc(size_t nmemb, size_t size) {
  */
 void my_free(void *ptr) {
 	my_malloc_errno = NO_ERROR;
-	if (ptr != NULL) {
-		metadata_t* block = (metadata_t*)((uint8_t*)ptr - sizeof(metadata_t));
-		unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
-		if (check_canary(block, canary)) {
-			my_malloc_errno = CANARY_CORRUPTED;
-		} else {
-			metadata_t *right = find_right(block);
-			if (right != NULL) {
-				remove_from_addr_list(right);
-				merge(block, right);
-			}
-			
-			metadata_t *left = find_left(block);
-			if (left != NULL) {
-				remove_from_addr_list(left);
-				merge(left, block);
-				block = left;
-			}
-			
-			add_to_addr_list(block);
-		}
+
+	if (ptr == NULL) {
+		return;
 	}
+
+	metadata_t* block = (metadata_t*) ptr - 1;
+	unsigned long canary = ((uintptr_t)block ^ CANARY_MAGIC_NUMBER) + 1890;
+
+	if (!check_canary(block, canary)) {
+		my_malloc_errno = CANARY_CORRUPTED;
+		return;
+	} 
+
+	metadata_t *right = find_right(block);
+	if (right != NULL) {
+		remove_from_addr_list(right);
+		merge(block, right);
+	}
+	
+	metadata_t *left = find_left(block);
+	if (left != NULL) {
+		remove_from_addr_list(left);
+		merge(left, block);
+		block = left;
+	}
+	
+	add_to_addr_list(block);
+	
 }
 
 static bool check_canary(metadata_t* block, unsigned long canary) {
-  return block->canary != canary || *(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) != canary;
+  return block->canary == canary && *(unsigned long*)((uint8_t*)block + sizeof(metadata_t) + block->size) == canary;
 }
 
 static void set_canary(metadata_t* block) {
@@ -201,14 +210,14 @@ static void remove_from_addr_list(metadata_t* remove_block) {
 		indirect = &(curr->next);
 		curr = curr->next;
 	}
-
 }
 
 static metadata_t* find_left(metadata_t* block) {
 	metadata_t *curr = address_list;
 	
 	while (curr != NULL) {
-		if ((metadata_t*)((uint8_t*)curr + curr->size + TOTAL_METADATA_SIZE) == block) {
+    metadata_t* left = (metadata_t*)((uint8_t*)curr + curr->size + TOTAL_METADATA_SIZE);
+		if (left == block) {
 			return curr;
 		}
 		curr = curr->next;
